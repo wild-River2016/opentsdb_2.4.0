@@ -78,8 +78,9 @@ final class TSDMain {
     } catch (Exception e) {
       log.warn("Failed to close stdin", e);
     }
-
+    //命令行解析工具
     final ArgP argp = new ArgP();
+    //注册基本的命令行参数
     CliOptions.addCommon(argp);
     argp.addOption("--port", "NUM", "TCP port to listen on.");
     argp.addOption("--bind", "ADDR", "Address to bind to (default: 0.0.0.0).");
@@ -106,8 +107,11 @@ final class TSDMain {
                    "Maximum time for which a new data point can be buffered"
                    + " (default: " + DEFAULT_FLUSH_INTERVAL + ").");
     argp.addOption("--statswport", "Force all stats to include the port");
+    //注册"--auto-metric"参数
     CliOptions.addAutoMetricFlag(argp);
+    //解析传入的参数
     args = CliOptions.parse(argp, args);
+    //args解析后记录到ArgP对象中，GC回收
     args = null; // free().
 
     // get a config object
@@ -174,7 +178,7 @@ final class TSDMain {
 
     StartupPlugin startup = null;
     try {
-      startup = loadStartupPlugins(config);
+      startup = loadStartupPlugins(config);//加载用户自定义插件
     } catch (IllegalArgumentException e) {
       usage(argp, e.getMessage(), 3);
     } catch (Exception e) {
