@@ -155,6 +155,7 @@ final class TSDMain {
     } catch (NumberFormatException nfe) {
       usage(argp, "Invalid connections limit", 1);
     }
+    //是否使用netty的nio
     if (config.getBoolean("tsd.network.async_io")) {
       int workers = Runtime.getRuntime().availableProcessors() * 2;
       if (config.hasProperty("tsd.network.worker_threads")) {
@@ -186,26 +187,32 @@ final class TSDMain {
     }
 
     try {
+      //创建tsdb（核心）
       tsdb = new TSDB(config);
       if (startup != null) {
         tsdb.setStartupPlugin(startup);
       }
+      //初始化其他插件
       tsdb.initializePlugins(true);
       if (config.getBoolean("tsd.storage.hbase.prefetch_meta")) {
+        //是否预加载hbase表的meta信息（主要是region信息）
         tsdb.preFetchHBaseMeta();
       }
       
-      // Make sure we don't even start if we can't find our tables.
+      // 检测表是否存在,不存在就抛异常
       tsdb.checkNecessaryTablesExist().joinUninterruptibly();
-      
+      //注册jvm的钩子函数
       registerShutdownHook();
+      //初始化netty相关组件
       final ServerBootstrap server = new ServerBootstrap(factory);
       
       // This manager is capable of lazy init, but we force an init
       // here to fail fast.
+      //RpcManager是opentsdb网络层核心组件之一，管理各种网络协议组件。为单例声明周期和tsdb一致
       final RpcManager manager = RpcManager.instance(tsdb);
 
       server.setPipelineFactory(new PipelineFactory(tsdb, manager, connections_limit));
+      //设置tcp相关参数
       if (config.hasProperty("tsd.network.backlog")) {
         server.setOption("backlog", config.getInt("tsd.network.backlog")); 
       }
@@ -231,6 +238,7 @@ final class TSDMain {
       }
       log.info("Ready to serve on " + addr);
     } catch (Throwable e) {
+      //释放已经加载的相关资源
       factory.releaseExternalResources();
       try {
         if (tsdb != null)

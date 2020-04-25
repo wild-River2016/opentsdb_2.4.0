@@ -49,18 +49,24 @@ public final class PipelineFactory implements ChannelPipelineFactory {
 
   // Those are sharable but maintain some state, so a single instance per
   // PipelineFactory is needed.
+  //管理当前的连接数
   private final ConnectionManager connmgr;
+  //tsdb支持多种网络协议，如http,Telnet等，根据当前channel上传递的数据内容判定具体的使用协议，并在对应的ChannelPipelin中添加处理器
   private final DetectHttpOrRpc HTTP_OR_RPC = new DetectHttpOrRpc();
+  //netty中的定时接口
   private final Timer timer;
+  //IdleStateHandler类型，netty提供用于检测channl空闲
   private final ChannelHandler timeoutHandler;
 
   /** Stateless handler for RPCs. */
+  //tsdb网络请求核心
   private final RpcHandler rpchandler;
   
   /** The TSDB to which we belong */ 
   private final TSDB tsdb;
   
   /** The server side socket timeout. **/
+  //服务端socket连接的超时时间
   private final int socketTimeout;
   
   /**
@@ -105,6 +111,7 @@ public final class PipelineFactory implements ChannelPipelineFactory {
     this.tsdb = tsdb;
     socketTimeout = tsdb.getConfig().getInt("tsd.core.socket.timeout");
     timer = tsdb.getTimer();
+    //设置空闲读写检测
     timeoutHandler = new IdleStateHandler(timer, 0, 0, socketTimeout);
     rpchandler = new RpcHandler(tsdb, manager);
     connmgr = new ConnectionManager(connections_limit);
@@ -130,6 +137,7 @@ public final class PipelineFactory implements ChannelPipelineFactory {
    * Dynamically changes the {@link ChannelPipeline} based on the request.
    * If a request uses HTTP, then this changes the pipeline to process HTTP.
    * Otherwise, the pipeline is changed to processes an RPC.
+   * 判断协议，解析数据
    */
   final class DetectHttpOrRpc extends FrameDecoder {
 
@@ -140,23 +148,30 @@ public final class PipelineFactory implements ChannelPipelineFactory {
       if (buffer.readableBytes() < 1) {  // Yes sometimes we can be called
         return null;                     // with an empty buffer...
       }
-
+      //读取第一个字节
       final int firstbyte = buffer.getUnsignedByte(buffer.readerIndex());
+      //获取当前channel关联的ChannelPipeline
       final ChannelPipeline pipeline = ctx.getPipeline();
       // None of the commands in the RPC protocol start with a capital ASCII
       // letter for the time being, and all HTTP commands do (GET, POST, etc.)
       // so use this as a cheap way to differentiate the two.
+      //检测第一个字母的范围，如果在A-Z直接，属于http
       if ('A' <= firstbyte && firstbyte <= 'Z') {
+        //http编解码处理
         pipeline.addLast("decoder", new HttpRequestDecoder());
+        //判断是否支持http chunk
         if (tsdb.getConfig().enable_chunked_requests()) {
           pipeline.addLast("aggregator", new HttpChunkAggregator(
               tsdb.getConfig().max_chunked_requests()));
         }
         // allow client to encode the payload (ie : with gziped json)
+        //对Gzip压缩的http请求进行解压处理
         pipeline.addLast("inflater", new HttpContentDecompressor());
+        //处理tsdb实例返回的http响应
         pipeline.addLast("encoder", new HttpResponseEncoder());
         pipeline.addLast("deflater", new HttpContentCompressor());
       } else {
+        //处理其他协议的解析
         pipeline.addLast("framer", new LineBasedFrameDecoder(1024));
         pipeline.addLast("encoder", ENCODER);
         pipeline.addLast("decoder", DECODER);
@@ -165,9 +180,10 @@ public final class PipelineFactory implements ChannelPipelineFactory {
       if (tsdb.getAuth() != null) {
         pipeline.addLast("authentication", new AuthenticationChannelHandler(tsdb));
       }
-
+      //添加空闲检测
       pipeline.addLast("timeout", timeoutHandler);
       pipeline.remove(this);
+      //添加处理客户端请求逻辑
       pipeline.addLast("handler", rpchandler);
 
       // Forward the buffer to the next handler.

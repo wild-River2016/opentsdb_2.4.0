@@ -50,6 +50,7 @@ public abstract class AbstractHttpQuery {
   private static final Logger LOG = LoggerFactory.getLogger(AbstractHttpQuery.class);
 
   /** When the query was started (useful for timing). */
+  /**统计处理时长*/
   private final long start_time = System.nanoTime();
 
   /** The request in this HTTP query. */
@@ -62,6 +63,7 @@ public abstract class AbstractHttpQuery {
   private final HttpMethod method;
 
   /** Parsed query string (lazily built on first access). */
+  /** 请求携带的参数，采用延时加载*/
   private Map<String, List<String>> querystring;
   
   /** Deferred result of this query, to allow asynchronous processing.
@@ -401,8 +403,10 @@ public abstract class AbstractHttpQuery {
   /**
    * Send just the status code without a body, used for 204 or 304
    * @param status The response code to reply with
+   * 只返回http状态码
    */
   public void sendStatusOnly(final HttpResponseStatus status) {
+    //检测当前连接状态，如果已断开，直接执行done方法并返回。
     if (!chan.isConnected()) {
       if(stats != null) {
         stats.markSendFailed();
@@ -410,16 +414,19 @@ public abstract class AbstractHttpQuery {
       done();
       return;
     }
-
+    //设置响应码
     response.setStatus(status);
     final boolean keepalive = HttpHeaders.isKeepAlive(request);
     if (keepalive) {
       HttpHeaders.setContentLength(response, 0);
     }
+    //将响应信息写入channel中
     final ChannelFuture future = chan.write(response);
     if (stats != null) {
+      //添加监听，响应发送成功后进行回调
       future.addListener(new SendSuccess());
     }
+    //不需要保持连接，响应结束后关闭channel
     if (!keepalive) {
       future.addListener(ChannelFutureListener.CLOSE);
     }
@@ -430,6 +437,7 @@ public abstract class AbstractHttpQuery {
    * Sends an HTTP reply to the client.
    * @param status The status of the request (e.g. 200 OK or 404 Not Found).
    * @param buf The content of the reply to send.
+   * 返回状态码+响应体
    */
   public void sendBuffer(final HttpResponseStatus status,
                           final ChannelBuffer buf,

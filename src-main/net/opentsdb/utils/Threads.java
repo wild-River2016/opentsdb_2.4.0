@@ -84,6 +84,7 @@ public class Threads {
    */
   public static HashedWheelTimer newTimer(final int ticks, 
       final int ticks_per_wheel, final String name) {
+    //用于线程命名
     class TimerThreadNamer implements ThreadNameDeterminer {
       @Override
       public String determineThreadName(String currentThreadName,
@@ -91,6 +92,11 @@ public class Threads {
         return "OpenTSDB Timer " + name + " #" + TIMER_ID.incrementAndGet();
       }
     }
+    //第一个参数：线程工厂
+    //第二个参数：线程参数命名
+    //第三个参数：两次指针转动之间的时间差
+    //第四个参数：ticks参数的时间单位
+    //第五个参数：当前时间轮有多少个小格子
     return new HashedWheelTimer(Executors.defaultThreadFactory(), 
         new TimerThreadNamer(), ticks, MILLISECONDS, ticks_per_wheel);
   }

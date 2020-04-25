@@ -61,6 +61,7 @@ final class RpcHandler extends IdleStateAwareChannelUpstreamHandler {
    * set of known-to-work headers */
   private final String cors_headers;
   /** RPC plugins.  Contains the handlers we dispatch requests to. */
+  /**解析得到的请求信息，交给RpcManager处理**/
   private final RpcManager rpc_manager;
 
   /** The TSDB to use. */
@@ -126,10 +127,13 @@ final class RpcHandler extends IdleStateAwareChannelUpstreamHandler {
   public void messageReceived(final ChannelHandlerContext ctx,
                               final MessageEvent msgevent) {
     try {
+      //获取前面处理后的数据
       final Object message = msgevent.getMessage();
+      //对telent消息进行处理
       if (message instanceof String[]) {
         handleTelnetRpc(msgevent.getChannel(), (String[]) message);
       } else if (message instanceof HttpRequest) {
+        //处理http类型请求数据
         handleHttpQuery(tsdb, msgevent.getChannel(), (HttpRequest) message);
       } else {
         logError(msgevent.getChannel(), "Unexpected message type "

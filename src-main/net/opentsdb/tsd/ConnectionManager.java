@@ -33,6 +33,7 @@ import net.opentsdb.stats.StatsCollector;
 
 /**
  * Keeps track of all existing connections.
+ * 对tsdb实例处理的网络连接数进行控制和管理。
  */
 final class ConnectionManager extends SimpleChannelHandler {
 
@@ -47,16 +48,20 @@ final class ConnectionManager extends SimpleChannelHandler {
   
   /** Max connections can be serviced by tsd, if over limit, tsd will refuse 
    * new connections. */
+  //实例所能处理的最大连接数上限，超过上限不再创建新的网络连接
   private final int connections_limit;
   
   /** A counter used for determining how many channels are open. Something odd
    * happens with the DefaultChannelGroup in that .size() doesn't return the
    * actual number of open connections. TODO - find out why. */
   private final AtomicInteger open_connections = new AtomicInteger();
-
+  //记录tsdb实例创建的channel对象
   private static final DefaultChannelGroup channels =
     new DefaultChannelGroup("all-channels");
 
+  /**
+   * 关闭所有channel连接
+   */
   static void closeAllConnections() {
     channels.close().awaitUninterruptibly();
   }
@@ -98,9 +103,16 @@ final class ConnectionManager extends SimpleChannelHandler {
         "type=unknown");
   }
 
+  /**
+   * 现在连接数量操作
+   * @param ctx
+   * @param e
+   * @throws IOException
+   */
   @Override
   public void channelOpen(final ChannelHandlerContext ctx,
                           final ChannelStateEvent e) throws IOException {
+    //检测当前连接数是否达到上限
     if (connections_limit > 0) {
       final int channel_size = open_connections.incrementAndGet();
       if (channel_size > connections_limit) {
@@ -109,6 +121,7 @@ final class ConnectionManager extends SimpleChannelHandler {
         // exceptionCaught will close the connection and increment the counter.
       }
     }
+    //添加创建的连接，添加到channels中
     channels.add(e.getChannel());
     connections_established.incrementAndGet();
   }
