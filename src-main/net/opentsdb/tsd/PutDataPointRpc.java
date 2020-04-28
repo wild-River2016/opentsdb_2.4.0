@@ -86,14 +86,14 @@ class PutDataPointRpc implements TelnetRpc, HttpRpc {
   protected static final AtomicLong raw_stored = new AtomicLong();
   protected static final AtomicLong raw_histograms_stored = new AtomicLong();
   protected static final AtomicLong rollup_stored = new AtomicLong();
-  protected static final AtomicLong hbase_errors = new AtomicLong();
+  protected static final AtomicLong hbase_errors = new AtomicLong();//写入hbase出现异常的次数
   protected static final AtomicLong unknown_errors = new AtomicLong();
-  protected static final AtomicLong invalid_values = new AtomicLong();
+  protected static final AtomicLong invalid_values = new AtomicLong();//写入不合法值的次数
   protected static final AtomicLong illegal_arguments = new AtomicLong();
   protected static final AtomicLong unknown_metrics = new AtomicLong();
   protected static final AtomicLong inflight_exceeded = new AtomicLong();
-  protected static final AtomicLong writes_blocked = new AtomicLong();
-  protected static final AtomicLong writes_timedout = new AtomicLong();
+  protected static final AtomicLong writes_blocked = new AtomicLong();//写入阻塞次数
+  protected static final AtomicLong writes_timedout = new AtomicLong();//写入超时次数
   protected static final AtomicLong requests_timedout = new AtomicLong();
   
   /** Whether or not to send error messages back over telnet */
@@ -284,6 +284,7 @@ class PutDataPointRpc implements TelnetRpc, HttpRpc {
     //noinspection TryWithIdenticalCatches
     try {
       checkAuthorization(tsdb, query);
+      //解析json数据
       dps = query.serializer()
               .parsePutV1(IncomingDataPoint.class, HttpJsonSerializer.TR_INCOMING);
     } catch (BadRequestException e) {

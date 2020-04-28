@@ -93,18 +93,23 @@ public final class UniqueId implements UniqueIdInterface {
   /** Table where IDs are stored.  */
   private final byte[] table;
   /** The kind of UniqueId, used as the column qualifier. */
+  /**管理metric、tagk、tagv与UID的映射关系*/
   private final byte[] kind;
   /** The type of UID represented by this cache */
   private final UniqueIdType type;
   /** Number of bytes on which each ID is encoded. */
+  /***/
   private final short id_width;
   /** Whether or not to randomize new IDs */
+  /**避免hbase热点问题，是否随机生成metric的UID*/
   private final boolean randomize_id;
 
   /** Cache for forward mappings (name to ID). */
+  /**为了加快查询速度，将字符串和UID之间的对应关系放到map中,key:字符串 value:UID*/
   private final ConcurrentHashMap<String, byte[]> name_cache;
   /** Cache for backward mappings (ID to name).
    * The ID in the key is a byte[] converted to a String to be Comparable. */
+  /**key:UID value:字符串*/
   private final ConcurrentHashMap<String, String> id_cache;
   
   /** Cache for forward mappings (name to ID). */
@@ -114,20 +119,25 @@ public final class UniqueId implements UniqueIdInterface {
   private final Cache<String, String> lru_id_cache;
   
   /** Map of pending UID assignments */
+  /**多个线程并发调用Uniqued对同一字符串分配UID时，记录正在分配UID的字符串，当前线程检测到已有线程正在分配此字符串，则不再进行分片*/
   private final HashMap<String, Deferred<byte[]>> pending_assignments =
     new HashMap<String, Deferred<byte[]>>();
   /** Set of UID rename */
+  /*记录正在重新分配的UID*/
   private final Set<String> renaming_id_names =
     Collections.synchronizedSet(new HashSet<String>());
 
   /** Number of times we avoided reading from HBase thanks to the cache. */
+  /*缓存命中的次数*/
   private volatile long cache_hits;
   /** Number of times we had to read from HBase and populate the cache. */
+  /*缓存未命中的次数*/
   private volatile long cache_misses;
   /** How many times we collided with an existing ID when attempting to 
    * generate a new UID */
   private volatile int random_id_collisions;
   /** How many times assignments have been rejected by the UID filter */
+  /*记录被UniqueIdFilterPlugin拦截测次数，可通过插件实现黑名单功能*/
   private volatile int rejected_assignments;
   
   /** The mode of operation for this TSD. */
@@ -137,6 +147,7 @@ public final class UniqueId implements UniqueIdInterface {
   private boolean use_mode;
   
   /** Whether or not to use the Guava LRU cache for IDs. */
+  /*是否为UID启用缓存*/
   private boolean use_lru;
   
   /** TSDB object used for filtering and/or meta generation. */
@@ -438,17 +449,21 @@ public final class UniqueId implements UniqueIdInterface {
   }
 
   public Deferred<byte[]> getIdAsync(final String name) {
+    //查询缓存
     final byte[] id = getIdFromCache(name);
     if (id != null) {
+      //命中缓存，累加操作
       incrementCacheHits();
       return Deferred.fromResult(id);
     }
     incrementCacheMiss();
     class GetIdCB implements Callback<byte[], byte[]> {
       public byte[] call(final byte[] id) {
+        //hbase查询结果为空
         if (id == null) {
           throw new NoSuchUniqueName(kind(), name);
         }
+        //检测长度是否合法
         if (id.length != id_width) {
           throw new IllegalStateException("Found id.length = " + id.length
                                           + " which is != " + id_width
@@ -779,14 +794,18 @@ public final class UniqueId implements UniqueIdInterface {
    * @throws IllegalStateException if all possible IDs are already assigned.
    * @throws IllegalStateException if the ID found in HBase is encoded on the
    * wrong number of bytes.
+   *查询成功返回，失败创建UID返回
    */
+  @Override
   public byte[] getOrCreateId(final String name) throws HBaseException {
     try {
+      //查询name
       return getIdAsync(name).joinUninterruptibly();
     } catch (NoSuchUniqueName e) {
       if (tsdb != null && tsdb.getUidFilter() != null && 
           tsdb.getUidFilter().fillterUIDAssignments()) {
         try {
+          //配置了插件检测name,类似黑名单
           if (!tsdb.getUidFilter().allowUIDAssignment(type, name, null, null)
                 .join()) {
             rejected_assignments++;
@@ -805,7 +824,9 @@ public final class UniqueId implements UniqueIdInterface {
       
       Deferred<byte[]> assignment = null;
       boolean pending = false;
+      //加锁同步
       synchronized (pending_assignments) {
+        //判断是否有线程并发问题，并正在分配UID
         assignment = pending_assignments.get(name);
         if (assignment == null) {
           // to prevent UID leaks that can be caused when multiple time
@@ -813,9 +834,11 @@ public final class UniqueId implements UniqueIdInterface {
           // deferred to the pending map as quickly as possible. Then we can 
           // start the assignment process after we've stashed the deferred 
           // and released the lock
+          //无并发，添加
           assignment = new Deferred<byte[]>();
           pending_assignments.put(name, assignment);
         } else {
+          //存在并发
           pending = true;
         }
       }
@@ -823,15 +846,17 @@ public final class UniqueId implements UniqueIdInterface {
       if (pending) {
         LOG.info("Already waiting for UID assignment: " + name);
         try {
+          //等待并发线程，返回分配的uid
           return assignment.joinUninterruptibly();
         } catch (Exception e1) {
           throw new RuntimeException("Should never be here", e1);
         }
       }
-      
+      //无并发
       // start the assignment dance after stashing the deferred
       byte[] uid = null;
       try {
+        //创建UID
         uid = new UniqueIdAllocator(name, assignment).tryAllocate().joinUninterruptibly();
       } catch (RuntimeException e1) {
         throw e1;
@@ -1337,6 +1362,7 @@ public final class UniqueId implements UniqueIdInterface {
   /** Returns the cell of the specified row key, using family:kind. */
   private Deferred<byte[]> hbaseGet(final byte[] key, final byte[] family) {
     final GetRequest get = new GetRequest(table, key);
+    //指定查询的family和qualifier
     get.family(family).qualifier(kind);
     class GetCB implements Callback<byte[], ArrayList<KeyValue>> {
       public byte[] call(final ArrayList<KeyValue> row) {
@@ -1346,6 +1372,7 @@ public final class UniqueId implements UniqueIdInterface {
         return row.get(0).value();
       }
     }
+    //异步执行查询hbase
     return client.get(get).addCallback(new GetCB());
   }
 

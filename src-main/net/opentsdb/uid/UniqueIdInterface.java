@@ -41,11 +41,13 @@ public interface UniqueIdInterface {
 
   /**
    * Returns what kind of Unique ID is served by this instance.
+   * UID类型
    */
   String kind();
 
   /**
    * Returns the number of bytes on which each Unique ID is encoded.
+   * UID长度，单位byte
    */
   short width();
 
@@ -59,6 +61,7 @@ public interface UniqueIdInterface {
    * @throws HBaseException if there is a problem communicating with HBase.
    * @throws IllegalArgumentException if the ID given in argument is encoded
    * on the wrong number of bytes.
+   * 根据UID查询字符串
    */
   String getName(byte[] id) throws NoSuchUniqueId, HBaseException;
 
@@ -74,6 +77,7 @@ public interface UniqueIdInterface {
    * @throws HBaseException if there is a problem communicating with HBase.
    * @throws IllegalStateException if the ID found in HBase is encoded on the
    * wrong number of bytes.
+   * 根据字符串查询UID
    */
   byte[] getId(String name) throws NoSuchUniqueName, HBaseException;
 
@@ -87,6 +91,7 @@ public interface UniqueIdInterface {
    * @throws IllegalStateException if all possible IDs are already assigned.
    * @throws IllegalStateException if the ID found in HBase is encoded on the
    * wrong number of bytes.
+   * 根据字符串查询UID,查询不到，则生成UID
    */
   byte[] getOrCreateId(String name) throws HBaseException, IllegalStateException;
 

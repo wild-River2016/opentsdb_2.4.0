@@ -205,10 +205,12 @@ final class HttpQuery extends AbstractHttpQuery {
    */
   @Override
   public String getQueryBaseRoute() {
+    //获取按照“/”切分后的URL
     final String[] split = explodePath();
     if (split.length < 1) {
       return "";
     }
+    //如果URI第一部分不是api,则使用低版本的API
     if (!split[0].toLowerCase().equals("api")) {
       return split[0].toLowerCase();
     }
@@ -218,6 +220,7 @@ final class HttpQuery extends AbstractHttpQuery {
     if (split.length < 2) {
       return "api";
     }
+    //URI带有版本信息，进行检查
     if (split[1].toLowerCase().startsWith("v") && split[1].length() > 1 &&
         Character.isDigit(split[1].charAt(1))) {
       try {
@@ -236,8 +239,10 @@ final class HttpQuery extends AbstractHttpQuery {
             "] cannot be parsed to an integer");
       }
     } else {
+      //默认版本，返回Route字符串并返回
       return "api/" + split[1].toLowerCase();
     }
+    //URI为api/版本号，则route为api
     if (split.length < 3){
       return "api";
     }
