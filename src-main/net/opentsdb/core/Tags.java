@@ -620,18 +620,21 @@ public final class Tags {
     throws NoSuchUniqueName {
     final ArrayList<byte[]> tag_ids = new ArrayList<byte[]>(tags.size());
     for (final Map.Entry<String, String> entry : tags.entrySet()) {
+      //获取tagk的UID
       final byte[] tag_id = (create && tsdb.getConfig().auto_tagk()
                              ? tsdb.tag_names.getOrCreateId(entry.getKey())
                              : tsdb.tag_names.getId(entry.getKey()));
+      //获取tagv的UID
       final byte[] value_id = (create && tsdb.getConfig().auto_tagv()
                                ? tsdb.tag_values.getOrCreateId(entry.getValue())
                                : tsdb.tag_values.getId(entry.getValue()));
       final byte[] thistag = new byte[tag_id.length + value_id.length];
       System.arraycopy(tag_id, 0, thistag, 0, tag_id.length);
       System.arraycopy(value_id, 0, thistag, tag_id.length, value_id.length);
+      //添加相关UID
       tag_ids.add(thistag);
     }
-    // Now sort the tags.
+    //进行排序
     Collections.sort(tag_ids, Bytes.MEMCMP);
     return tag_ids;
   }

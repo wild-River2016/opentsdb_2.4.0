@@ -1006,6 +1006,7 @@ public final class TSDB {
                                    final long value,
                                    final Map<String, String> tags) {
     final byte[] v;
+    //value转换成对应的数组，根据value值的范围决定转换后的数组长度
     if (Byte.MIN_VALUE <= value && value <= Byte.MAX_VALUE) {
       v = new byte[] { (byte) value };
     } else if (Short.MIN_VALUE <= value && value <= Short.MAX_VALUE) {
@@ -1015,7 +1016,7 @@ public final class TSDB {
     } else {
       v = Bytes.fromLong(value);
     }
-
+    //qualifier的低4位，用于标识数据类型及数据长度。
     final short flags = (short) (v.length - 1);  // Just the length.
     return addPointInternal(metric, timestamp, v, tags, flags);
   }
@@ -1050,11 +1051,13 @@ public final class TSDB {
                                    final long timestamp,
                                    final double value,
                                    final Map<String, String> tags) {
+    //检测value是否合法
     if (Double.isNaN(value) || Double.isInfinite(value)) {
       throw new IllegalArgumentException("value is NaN or Infinite: " + value
                                          + " for metric=" + metric
                                          + " timestamp=" + timestamp);
     }
+    //0x8标识此次写入的是浮点数，浮点数对应flags高位为1 实际为0xF
     final short flags = Const.FLAG_FLOAT | 0x7;  // A float stored on 8 bytes.
     return addPointInternal(metric, timestamp,
                             Bytes.fromLong(Double.doubleToRawLongBits(value)),
@@ -1146,10 +1149,11 @@ public final class TSDB {
       final short flags) {
 
     checkTimestampAndTags(metric, timestamp, value, tags, flags);
+    //获取rowkey
     final byte[] row = IncomingDataPoints.rowKeyTemplate(this, metric, tags);
-    
+    //构建列，timestamp精度为秒级返回2个字节，精度为毫秒返回4个字节
     final byte[] qualifier = Internal.buildQualifier(timestamp, flags);
-
+    //
     return storeIntoDB(metric, timestamp, value, tags, flags, row, qualifier);
   }
   
@@ -1161,7 +1165,7 @@ public final class TSDB {
                                              final byte[] row, 
                                              final byte[] qualifier) {
     final long base_time;
-
+    //计算basetime
     if ((timestamp & Const.SECOND_MASK) != 0) {
       // drop the ms timestamp to seconds to calculate the base timestamp
       base_time = ((timestamp / 1000) -
@@ -1176,28 +1180,35 @@ public final class TSDB {
       @Override
       public Deferred<Object> call(final Boolean allowed) throws Exception {
         if (!allowed) {
+          //未通过WriteableDataPointFilterPlugin过滤，递增并返回null
           rejected_dps.incrementAndGet();
           return Deferred.fromResult(null);
         }
-
+        //将base_time填充到rowkey中
         Bytes.setInt(row, (int) base_time, metrics.width() + Const.SALT_WIDTH());
+        //将salt填充到rowkey中
         RowKey.prefixKeyWithSalt(row);
 
         Deferred<Object> result = null;
+        //使用追加模式
         if (!isHistogram(qualifier) && config.enable_appends()) {
           if(config.use_otsdb_timestamp()) {
               LOG.error("Cannot use Date Tiered Compaction with AppendPoints. Please turn off either of them.");
           }
           final AppendDataPoints kv = new AppendDataPoints(qualifier, value);
+          //AppendRequest 请求中指定qualifier始终是0x50000
           final AppendRequest point = new AppendRequest(table, row, FAMILY,
                   AppendDataPoints.APPEND_COLUMN_QUALIFIER, kv.getBytes());
+          //向habse发起请求
           result = client.append(point);
         } else if (!isHistogram(qualifier)) {
           scheduleForCompaction(row, (int) base_time);
           final PutRequest point = RequestBuilder.buildPutRequest(config, table, row, FAMILY, qualifier, value, timestamp);
           result = client.put(point);
         } else {
+          //开启定期压缩功能，添加到队列中，等待后台线程进行压缩操作
           scheduleForCompaction(row, (int) base_time);
+          //将待写的value值写入指定的列中
           final PutRequest histo_point = new PutRequest(table, row, FAMILY, qualifier, value);
           result = client.put(histo_point);
         }
@@ -1213,7 +1224,7 @@ public final class TSDB {
             !config.enable_tsuid_tracking() && rt_publisher == null) {
           return result;
         }
-
+        //创建tsuid,将其中salt和时间戳部分删除
         final byte[] tsuid = UniqueId.getTSUIDFromKey(row, METRICS_WIDTH,
             Const.TIMESTAMP_BYTES);
 
@@ -1250,7 +1261,7 @@ public final class TSDB {
         return "addPointInternal Write Callback";
       }
     }
-
+    //配置了过滤对象，通过过滤之后才能真正写入
     if (ts_filter != null && ts_filter.filterDataPoints()) {
       if (isHistogram(qualifier)) {
         return ts_filter.allowHistogramPoint(metric, timestamp, value, tags)

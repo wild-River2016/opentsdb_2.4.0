@@ -826,17 +826,24 @@ public final class Internal {
    */
   public static byte[] buildQualifier(final long timestamp, final short flags) {
     final long base_time;
+    //对毫秒进行处理
     if ((timestamp & Const.SECOND_MASK) != 0) {
       // drop the ms timestamp to seconds to calculate the base timestamp
+      //转换成小时
       base_time = ((timestamp / 1000) - ((timestamp / 1000) 
           % Const.MAX_TIMESPAN));
+      //timestamp - (base_time * 1000)的值是0-3600000（最多占21位），向走移动6位（占28位），
+      //将flags填充到低4位，高4位全部设置为1.
       final int qual = (int) (((timestamp - (base_time * 1000) 
           << (Const.MS_FLAG_BITS)) | flags) | Const.MS_FLAG);
+      //返回4个字节
       return Bytes.fromInt(qual);
     } else {
       base_time = (timestamp - (timestamp % Const.MAX_TIMESPAN));
+      //(timestamp - base_time)值为0-3600之间（最多占12位），向左移动4位，将flags填充到低4位
       final short qual = (short) ((timestamp - base_time) << Const.FLAG_BITS
           | flags);
+      //返回2个字节
       return Bytes.fromShort(qual);
     }
   }

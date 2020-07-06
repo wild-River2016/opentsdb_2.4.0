@@ -126,24 +126,26 @@ final class IncomingDataPoints implements WritableDataPoints {
    */
   static byte[] rowKeyTemplate(final TSDB tsdb, final String metric,
       final Map<String, String> tags) {
+    //获取配置中指定的相关参数长度
     final short metric_width = tsdb.metrics.width();
     final short tag_name_width = tsdb.tag_names.width();
     final short tag_value_width = tsdb.tag_values.width();
     final short num_tags = (short) tags.size();
-
+    //计算rowkey长度
     int row_size = (Const.SALT_WIDTH() + metric_width + Const.TIMESTAMP_BYTES 
         + tag_name_width * num_tags + tag_value_width * num_tags);
     final byte[] row = new byte[row_size];
-
+    //跳过salt部分，进行填充
     short pos = (short) Const.SALT_WIDTH();
-
+    //获取UID,并填充到rowkey对应部分
     copyInRowKey(row, pos,
         (tsdb.config.auto_metric() ? tsdb.metrics.getOrCreateId(metric)
             : tsdb.metrics.getId(metric)));
+    //uid填充完成，开始填充后续部分
     pos += metric_width;
-
+    //跳过时间戳，填充tag部分内容
     pos += Const.TIMESTAMP_BYTES;
-
+    //获取所有tagk和tagv对应的uid,填充到tag部分
     for (final byte[] tag : Tags.resolveOrCreateAll(tsdb, tags)) {
       copyInRowKey(row, pos, tag);
       pos += tag.length;
@@ -275,6 +277,7 @@ final class IncomingDataPoints implements WritableDataPoints {
     if (row == null) {
       throw new IllegalStateException("setSeries() never called!");
     }
+    //校验时间戳是否合法
     final boolean ms_timestamp = (timestamp & Const.SECOND_MASK) != 0;
 
     // we only accept unix epoch timestamps in seconds or milliseconds
