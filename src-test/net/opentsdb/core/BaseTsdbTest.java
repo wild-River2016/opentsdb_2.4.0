@@ -399,13 +399,16 @@ public class BaseTsdbTest {
     for (final byte[] tag : tags) {
       tags_length += tag.length;
     }
+    //计算rowkey长度
     final byte[] key = new byte[Const.SALT_WIDTH() + metric.length + 
                                 Const.TIMESTAMP_BYTES + tags_length];
-    
+    //将metric计算结果添加到rowkey中
     System.arraycopy(metric, 0, key, Const.SALT_WIDTH(), metric.length);
+    //base_time计算结果添加到rowKey中
     System.arraycopy(Bytes.fromInt(base_time), 0, key, 
         Const.SALT_WIDTH() + metric.length, Const.TIMESTAMP_BYTES);
     int offset = Const.SALT_WIDTH() + metric.length + Const.TIMESTAMP_BYTES;
+    //遍历tags，添加到rowkey中
     for (final byte[] tag : tags) {
       System.arraycopy(tag, 0, key, offset, tag.length);
       offset += tag.length;

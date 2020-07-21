@@ -139,6 +139,7 @@ final public class RowKey {
    * @since 2.2
    */
   public static void prefixKeyWithSalt(final byte[] row_key) {
+    //通过salt长度判断是否启动salt
     if (Const.SALT_WIDTH() > 0) {
       if (row_key.length < (Const.SALT_WIDTH() + TSDB.metrics_width()) || 
         (Bytes.memcmp(row_key, new byte[Const.SALT_WIDTH() + TSDB.metrics_width()], 
@@ -150,18 +151,21 @@ final public class RowKey {
           Const.TIMESTAMP_BYTES;
       
       // we want the metric and tags, not the timestamp
+      //获取除去salt、小时时间戳的字节数组
       final byte[] salt_base = 
           new byte[row_key.length - Const.SALT_WIDTH() - Const.TIMESTAMP_BYTES];
       System.arraycopy(row_key, Const.SALT_WIDTH(), salt_base, 0, TSDB.metrics_width());
       System.arraycopy(row_key, tags_start,salt_base, TSDB.metrics_width(), 
           row_key.length - tags_start);
+      //取模计算
       int modulo = Arrays.hashCode(salt_base) % Const.SALT_BUCKETS();
       if (modulo < 0) {
         // make sure we return a positive salt.
         modulo = modulo * -1;
       }
-    
+      //将int类型数据转换为字节数组
       final byte[] salt = getSaltBytes(modulo);
+      //将计算得到的salt添加到rowKey中
       System.arraycopy(salt, 0, row_key, 0, Const.SALT_WIDTH());
     } // else salting is disabled so it's a no-op
   }
