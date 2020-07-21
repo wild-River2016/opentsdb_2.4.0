@@ -843,4 +843,8 @@ public class AggregationIterator implements SeekableView, DataPoint,
     // TODO don't know if this is right
     return values.length;
   }
+
+  public long[] getValues() {
+    return values;
+  }
 }

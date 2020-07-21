@@ -2199,5 +2199,24 @@ public final class TSDB {
   final Deferred<Object> delete(final byte[] key, final byte[][] qualifiers) {
     return client.delete(new DeleteRequest(table, key, FAMILY, qualifiers));
   }
+  /**
+   * @Description: 获取写入的数据量
+   * @Return long
+   * @author lsh
+   * @date 2020/7/14 9:56
+   */
+  public static long getDatapointsAdded() {
+    return datapoints_added.get();
+  }
+  /**
+   * @Description: 设置数据总量
+   * @param count 1
+   * @Return void
+   * @author lsh
+   * @date 2020/7/14 9:57
+   */
+  public static void setDatapointsAdded(long count) {
+    datapoints_added.getAndSet(count);
+  }
 
 }
