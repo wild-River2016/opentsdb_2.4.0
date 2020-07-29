@@ -32,6 +32,7 @@ import net.opentsdb.stats.Histogram;
 
 /**
  * Receives new data points and stores them in HBase.
+ * 接收新的数据点并将其存入hbase
  */
 final class IncomingDataPoints implements WritableDataPoints {
 

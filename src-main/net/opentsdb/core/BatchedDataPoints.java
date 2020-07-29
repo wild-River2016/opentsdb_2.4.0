@@ -30,6 +30,7 @@ import net.opentsdb.meta.Annotation;
  * written until {@code flushNow} is called. This ensures that true batch 
  * dynamics can be leveraged. This implementation will allow an entire hours 
  * worth of data to be written in a single transaction to the data table.
+ * 接收新的数据点并以压缩的方式进行存储
  */
 final class BatchedDataPoints implements WritableDataPoints {
 

@@ -50,6 +50,7 @@ final class TextImporter {
   }
 
   public static void main(String[] args) throws Exception {
+    //解析命令行参数
     ArgP argp = new ArgP();
     CliOptions.addCommon(argp);
     CliOptions.addAutoMetricFlag(argp);
@@ -67,12 +68,14 @@ final class TextImporter {
 
     final TSDB tsdb = new TSDB(config);
     final boolean skip_errors = argp.has("--skip-errors");
+    //检测hbase表是否存在
     tsdb.checkNecessaryTablesExist().joinUninterruptibly();
     argp = null;
     try {
       int points = 0;
       final long start_time = System.nanoTime();
       for (final String path : args) {
+        //读取指定的数据文件并导入
         points += importFile(tsdb.getClient(), tsdb, path, skip_errors);
       }
       final double time_delta = (System.nanoTime() - start_time) / 1000000000.0;
@@ -88,6 +91,7 @@ final class TextImporter {
       });
     } finally {
       try {
+        //关闭tsdb实例
         tsdb.shutdown().joinUninterruptibly();
       } catch (Exception e) {
         LOG.error("Unexpected exception", e);
@@ -104,17 +108,21 @@ final class TextImporter {
                                 final boolean skip_errors) throws IOException {
     final long start_time = System.nanoTime();
     long ping_start_time = start_time;
+    //读取指定路径的文件
     final BufferedReader in = open(path);
     String line = null;
     int points = 0;
     try {
       final class Errback implements Callback<Object, Exception> {
         public Object call(final Exception arg) {
+          //针对特定异常进行处理，流量异常
           if (arg instanceof PleaseThrottleException) {
             final PleaseThrottleException e = (PleaseThrottleException) arg;
             LOG.warn("Need to throttle, HBase isn't keeping up.", e);
+            //将限流状态位更改为true
             throttle = true;
             final HBaseRpc rpc = e.getFailedRpc();
+            //如果是PutRequest的异常，进行重试
             if (rpc instanceof PutRequest) {
               client.put((PutRequest) rpc);  // Don't lose edits.
             }
@@ -131,8 +139,11 @@ final class TextImporter {
       };
       final Errback errback = new Errback();
       LOG.info("reading from file:" + path);
+      //读取一行数据，一行对应一个时序点数据
       while ((line = in.readLine()) != null) {
+        //按照空格对数据进行切分
         final String[] words = Tags.splitString(line, ' ');
+        //检测metric是否合法
         final String metric = words[0];
         if (metric.length() <= 0) {
           if (skip_errors) {
@@ -144,6 +155,7 @@ final class TextImporter {
             throw new RuntimeException("invalid metric: " + metric);
           }
         }
+        //检测timestamp是否合法
         final long timestamp;
         try {
           timestamp = Tags.parseLong(words[1]);
@@ -167,7 +179,7 @@ final class TextImporter {
             throw e;
           }
         }
-        
+        //检测value是否合法
         final String value = words[2];
         if (value.length() <= 0) {
           if (skip_errors) {
@@ -181,22 +193,29 @@ final class TextImporter {
         }
         
         try {
+          //解析该数据点对应的tag
           final HashMap<String, String> tags = new HashMap<String, String>();
+          //一个tag 三个字节
           for (int i = 3; i < words.length; i++) {
             if (!words[i].isEmpty()) {
               Tags.parse(tags, words[i]);
             }
           }
-          
+          //创建WritableDataPoints对象，底层为IncomingDataPoints对象，
+          // 可以记录多个数据点，这些点的metric和tag必须相同
           final WritableDataPoints dp = getDataPoints(tsdb, metric, tags);
           Deferred<Object> d;
+          //根据value类型进行数据添加
           if (Tags.looksLikeInteger(value)) {
             d = dp.addPoint(timestamp, Tags.parseLong(value));
           } else {  // floating point value
             d = dp.addPoint(timestamp, Float.parseFloat(value));
           }
+          //添加回调
           d.addErrback(errback);
+          //记录写入点的个数
           points++;
+          //限流操作
           if (points % 1000000 == 0) {
             final long now = System.nanoTime();
             ping_start_time = (now - ping_start_time) / 1000000;
@@ -205,10 +224,12 @@ final class TextImporter {
                                    (1000000 * 1000.0 / ping_start_time)));
             ping_start_time = now;
           }
+          //为true表示进行限流操作
           if (throttle) {
             LOG.info("Throttling...");
             long throttle_time = System.nanoTime();
             try {
+              //等待当前IncomingDataPoints中的点全部写入完成，再开始进行写入
               d.joinUninterruptibly();
             } catch (final Exception e) {
               throw new RuntimeException("Should never happen", e);
@@ -217,7 +238,8 @@ final class TextImporter {
             if (throttle_time < 1000000000L) {
               LOG.info("Got throttled for only " + throttle_time + 
                   "ns, sleeping a bit now");
-              try { 
+              try {
+                //如果限流时间短，在暂停一段时间
                 Thread.sleep(1000); 
               } catch (InterruptedException e) { 
                 throw new RuntimeException("interrupted", e); 
