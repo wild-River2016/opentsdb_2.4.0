@@ -1,0 +1,33 @@
+{
+      "aggregationIds": {
+              "sum": 0,
+              "count": 1,
+              "min": 2,
+              "max": 3,
+			  "median":4
+      },
+      "intervals": [{
+              "table": "tsdb",
+              "preAggregationTable": "tsdb-preagg",
+              "interval": "1m",
+              "rowSpan": "1h",
+              "defaultInterval": true
+      }, {
+              "table": "tsdb-rollup-1h",
+              "preAggregationTable": "tsdb-rollup-preagg-1h",
+              "interval": "1h",
+              "rowSpan": "1d"
+			  
+      }, {
+			  "table": "tsdb-rollup-1d",
+              "preAggregationTable": "tsdb-rollup-preagg-1d",
+              "interval": "1d",
+              "rowSpan": "1n"		  
+	  }, {
+			  "table": "tsdb-rollup-1n",
+              "preAggregationTable": "tsdb-rollup-preagg-1n",
+              "interval": "1n",
+              "rowSpan": "1y"
+	  }
+	  ]
+}
