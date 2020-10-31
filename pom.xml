@@ -328,7 +328,7 @@
             </goals>
             <configuration>
               <jdkVersion>1.8</jdkVersion>
-              <javadocFriendlyComments>true</javadocFriendlyComments>
+<!--              <javadocFriendlyComments>true</javadocFriendlyComments>-->
               <packageName>net.opentsdb.query.expression.parser</packageName>
               <sourceDirectory>${basedir}/src/</sourceDirectory>
               <outputDirectory>${project.build.directory}/generated-sources/</outputDirectory>
